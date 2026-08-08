@@ -1,6 +1,6 @@
 import streamlit as st
 from data_fetch import get_option_chain, get_price_data, get_sensex_spot
-from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands
+from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Sensex Expiry Dashboard", layout="wide")
@@ -27,7 +27,11 @@ try:
     col2.metric("Max Pain", f"{max_pain:,.0f}")
     col3.metric("PCR", round(pcr, 2))
     col4.metric("Top OI Wall", f"{oi_walls[0]:,.0f}")
-
+st.subheader("Setup Summary")
+    summary_lines = generate_setup_summary(spot_price, max_pain, pcr, oi_walls, price_df)
+    for line in summary_lines:
+        st.write(f"• {line}")
+    st.caption("This is a descriptive summary of the data above — not a trade recommendation.")
     st.subheader("Price Action with Bollinger Bands")
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
