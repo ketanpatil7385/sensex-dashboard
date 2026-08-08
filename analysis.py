@@ -39,3 +39,42 @@ def calculate_bollinger_bands(price_df, window=20, num_std=2):
     df["upper_band"] = df["sma"] + (num_std * df["std"])
     df["lower_band"] = df["sma"] - (num_std * df["std"])
     return df
+def generate_setup_summary(spot_price, max_pain, pcr, oi_walls, price_df):
+    """
+    Descriptive summary of current option chain + price structure.
+    This describes the data only — it does not recommend any trade.
+    """
+    lines = []
+
+    diff = spot_price - max_pain
+    if abs(diff) < 100:
+        lines.append(f"Spot ({spot_price:,.0f}) is sitting very close to max pain ({max_pain:,.0f}).")
+    elif diff > 0:
+        lines.append(f"Spot ({spot_price:,.0f}) is {diff:,.0f} points above max pain ({max_pain:,.0f}).")
+    else:
+        lines.append(f"Spot ({spot_price:,.0f}) is {abs(diff):,.0f} points below max pain ({max_pain:,.0f}).")
+
+    if pcr > 1.2:
+        lines.append(f"PCR is {pcr:.2f} — put OI significantly exceeds call OI.")
+    elif pcr < 0.8:
+        lines.append(f"PCR is {pcr:.2f} — call OI significantly exceeds put OI.")
+    else:
+        lines.append(f"PCR is {pcr:.2f} — fairly balanced positioning between calls and puts.")
+
+    resistance = [w for w in oi_walls if w > spot_price]
+    support = [w for w in oi_walls if w < spot_price]
+    if resistance:
+        lines.append(f"Nearest heavy OI above spot (possible resistance): {min(resistance):,.0f}")
+    if support:
+        lines.append(f"Nearest heavy OI below spot (possible support): {max(support):,.0f}")
+
+    if "upper_band" in price_df.columns and len(price_df.dropna()) > 0:
+        last = price_df.dropna().iloc[-1]
+        if last["close"] >= last["upper_band"]:
+            lines.append("Price is at or above the upper Bollinger Band — potentially overextended on the upside.")
+        elif last["close"] <= last["lower_band"]:
+            lines.append("Price is at or below the lower Bollinger Band — potentially overextended on the downside.")
+        else:
+            lines.append("Price is trading within the Bollinger Bands — no extreme currently.")
+
+    return lines
