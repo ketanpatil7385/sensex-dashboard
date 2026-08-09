@@ -75,7 +75,7 @@ def get_option_chain():
     return merged.sort_values("strike").reset_index(drop=True)
 
 
-def get_price_data(interval="5minute", days=5):
+def get_price_data(interval="5minute", days=60):
     to_date = datetime.now()
     from_date = to_date - timedelta(days=days)
     data = kite.historical_data(SENSEX_TOKEN, from_date, to_date, interval)
