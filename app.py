@@ -1,6 +1,6 @@
 import streamlit as st
 from data_fetch import get_option_chain, get_price_data, get_sensex_spot
-from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_multi_lookahead
+from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_multi_lookahead, backtest_baseline_drift
 import plotly.graph_objects as go
 import pandas as pd
 
@@ -72,7 +72,19 @@ try:
         })
     bt_df = pd.DataFrame(rows)
     st.dataframe(bt_df, use_container_width=True)
-    st.caption("Historical pattern only — past behavior doesn't guarantee future results.")
+
+    st.subheader("Baseline: Average Drift (All Periods, No Condition)")
+    baseline = backtest_baseline_drift(price_df)
+    baseline_rows = []
+    for window, res in baseline.items():
+        baseline_rows.append({
+            "Window": window,
+            "Baseline Avg %": round(res["avg_pct_change"], 3),
+            "Baseline % Up": round(res["pct_positive"], 0),
+        })
+    baseline_df = pd.DataFrame(baseline_rows)
+    st.dataframe(baseline_df, use_container_width=True)
+    st.caption("Compare this to the touch-specific table above — if the numbers are similar, the band-touch pattern is likely just general market drift, not a distinct signal.")
 
     st.caption("⚠️ Data and analysis only — not investment advice. Consult a SEBI-registered advisor before trading.")
 
