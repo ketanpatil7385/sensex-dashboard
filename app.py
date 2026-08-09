@@ -27,7 +27,7 @@ try:
     col2.metric("Max Pain", f"{max_pain:,.0f}")
     col3.metric("PCR", round(pcr, 2))
     col4.metric("Top OI Wall", f"{oi_walls[0]:,.0f}")
-st.subheader("Setup Summary")
+    st.subheader("Setup Summary")
     summary_lines = generate_setup_summary(spot_price, max_pain, pcr, oi_walls, price_df)
     for line in summary_lines:
         st.write(f"• {line}")
