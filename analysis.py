@@ -78,51 +78,6 @@ def generate_setup_summary(spot_price, max_pain, pcr, oi_walls, price_df):
     return lines
 
 
-def backtest_bollinger_multi_lookahead(price_df, lookaheads=[3, 6, 12, 24]):
-    df = price_df.dropna().reset_index(drop=True)
-    all_results = {}
-    for lookahead in lookaheads:
-        results = {"upper_touch": [], "lower_touch": []}
-        for i in range(len(df) - lookahead):
-            row = df.iloc[i]
-            future_price = df.iloc[i + lookahead]["close"]
-            pct_change = (future_price - row["close"]) / row["close"] * 100
-            if row["close"] >= row["upper_band"]:
-                results["upper_touch"].append(pct_change)
-            elif row["close"] <= row["lower_band"]:
-                results["lower_touch"].append(pct_change)
-        summary = {}
-        for key, changes in results.items():
-            if changes:
-                summary[key] = {"count": len(changes), "avg_pct_change": sum(changes) / len(changes), "pct_positive": sum(1 for c in changes if c > 0) / len(changes) * 100}
-            else:
-                summary[key] = {"count": 0, "avg_pct_change": 0, "pct_positive": 0}
-        minutes = lookahead * 5
-        all_results[f"{minutes} min"] = summary
-    return all_results
-
-
-def backtest_baseline_drift(price_df, lookaheads=[3, 6, 12, 24]):
-    df = price_df.dropna().reset_index(drop=True)
-    baseline = {}
-    for lookahead in lookaheads:
-        changes = []
-        for i in range(len(df) - lookahead):
-            row = df.iloc[i]
-            future_price = df.iloc[i + lookahead]["close"]
-            pct_change = (future_price - row["close"]) / row["close"] * 100
-            changes.append(pct_change)
-        minutes = lookahead * 5
-        if changes:
-            baseline[f"{minutes} min"] = {
-                "avg_pct_change": sum(changes) / len(changes),
-                "pct_positive": sum(1 for c in changes if c > 0) / len(changes) * 100,
-            }
-        else:
-            baseline[f"{minutes} min"] = {"avg_pct_change": 0, "pct_positive": 0}
-    return baseline
-
-
 def classify_trend(price_df, short_window=9, long_window=21):
     df = price_df.copy()
     df["sma_short"] = df["close"].rolling(window=short_window).mean()
@@ -164,4 +119,45 @@ def classify_trend(price_df, short_window=9, long_window=21):
         "price_vs_long_sma": "Above" if price_above_long else "Below",
         "higher_highs": higher_highs,
         "higher_lows": higher_lows,
+    }
+
+
+def calculate_atr(price_df, period=14):
+    df = price_df.copy()
+    df["prev_close"] = df["close"].shift(1)
+    df["tr"] = df.apply(lambda row: max(
+        row["high"] - row["low"],
+        abs(row["high"] - row["prev_close"]) if pd.notna(row["prev_close"]) else 0,
+        abs(row["low"] - row["prev_close"]) if pd.notna(row["prev_close"]) else 0,
+    ), axis=1)
+    df["atr"] = df["tr"].rolling(window=period).mean()
+    return df["atr"].iloc[-1] if len(df.dropna()) > 0 else None
+
+
+def get_volatility_context(price_df):
+    df = price_df.dropna(subset=["close", "high", "low"]).copy()
+    if len(df) < 20:
+        return {"atr": None, "today_range": None, "avg_range": None, "band_width": None}
+
+    atr = calculate_atr(df)
+
+    df["date_only"] = pd.to_datetime(df["date"]).dt.date
+    today = df["date_only"].max()
+    today_df = df[df["date_only"] == today]
+    today_range = today_df["high"].max() - today_df["low"].min() if len(today_df) > 0 else None
+
+    daily_ranges = df.groupby("date_only").apply(lambda g: g["high"].max() - g["low"].min())
+    avg_range = daily_ranges.mean() if len(daily_ranges) > 0 else None
+
+    band_width = None
+    if "upper_band" in df.columns and "lower_band" in df.columns:
+        last = df.iloc[-1]
+        if pd.notna(last.get("upper_band")) and pd.notna(last.get("lower_band")):
+            band_width = last["upper_band"] - last["lower_band"]
+
+    return {
+        "atr": atr,
+        "today_range": today_range,
+        "avg_range": avg_range,
+        "band_width": band_width,
     }
