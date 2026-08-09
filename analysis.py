@@ -78,3 +78,29 @@ def generate_setup_summary(spot_price, max_pain, pcr, oi_walls, price_df):
             lines.append("Price is trading within the Bollinger Bands — no extreme currently.")
 
     return lines
+    def backtest_bollinger_touches(price_df, lookahead=6):
+    df = price_df.dropna().reset_index(drop=True)
+    results = {"upper_touch": [], "lower_touch": []}
+
+    for i in range(len(df) - lookahead):
+        row = df.iloc[i]
+        future_price = df.iloc[i + lookahead]["close"]
+        pct_change = (future_price - row["close"]) / row["close"] * 100
+
+        if row["close"] >= row["upper_band"]:
+            results["upper_touch"].append(pct_change)
+        elif row["close"] <= row["lower_band"]:
+            results["lower_touch"].append(pct_change)
+
+    summary = {}
+    for key, changes in results.items():
+        if changes:
+            summary[key] = {
+                "count": len(changes),
+                "avg_pct_change": sum(changes) / len(changes),
+                "pct_positive": sum(1 for c in changes if c > 0) / len(changes) * 100,
+            }
+        else:
+            summary[key] = {"count": 0, "avg_pct_change": 0, "pct_positive": 0}
+
+    return summary
