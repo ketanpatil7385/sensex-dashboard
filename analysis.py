@@ -121,3 +121,46 @@ def backtest_baseline_drift(price_df, lookaheads=[3, 6, 12, 24]):
         else:
             baseline[f"{minutes} min"] = {"avg_pct_change": 0, "pct_positive": 0}
     return baseline
+    
+def classify_trend(price_df, short_window=9, long_window=21):
+    df = price_df.copy()
+    df["sma_short"] = df["close"].rolling(window=short_window).mean()
+    df["sma_long"] = df["close"].rolling(window=long_window).mean()
+    df = df.dropna()
+
+    if len(df) < 5:
+        return {"trend": "Insufficient data", "strength": "N/A"}
+
+    last = df.iloc[-1]
+    prev = df.iloc[-5]
+
+    price_above_short = last["close"] > last["sma_short"]
+    price_above_long = last["close"] > last["sma_long"]
+    short_above_long = last["sma_short"] > last["sma_long"]
+    sma_short_rising = last["sma_short"] > prev["sma_short"]
+
+    recent = df.tail(20)
+    higher_highs = recent["high"].iloc[-10:].max() > recent["high"].iloc[:10].max()
+    higher_lows = recent["low"].iloc[-10:].min() > recent["low"].iloc[:10].min()
+
+    bullish_signals = sum([price_above_short, price_above_long, short_above_long, sma_short_rising, higher_highs, higher_lows])
+
+    if bullish_signals >= 5:
+        trend = "Strong Uptrend"
+    elif bullish_signals >= 4:
+        trend = "Mild Uptrend"
+    elif bullish_signals <= 1:
+        trend = "Strong Downtrend"
+    elif bullish_signals <= 2:
+        trend = "Mild Downtrend"
+    else:
+        trend = "Sideways / No Clear Trend"
+
+    return {
+        "trend": trend,
+        "bullish_signals": f"{bullish_signals}/6",
+        "price_vs_short_sma": "Above" if price_above_short else "Below",
+        "price_vs_long_sma": "Above" if price_above_long else "Below",
+        "higher_highs": higher_highs,
+        "higher_lows": higher_lows,
+    }
