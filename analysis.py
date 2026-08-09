@@ -121,7 +121,8 @@ def backtest_baseline_drift(price_df, lookaheads=[3, 6, 12, 24]):
         else:
             baseline[f"{minutes} min"] = {"avg_pct_change": 0, "pct_positive": 0}
     return baseline
-    
+
+
 def classify_trend(price_df, short_window=9, long_window=21):
     df = price_df.copy()
     df["sma_short"] = df["close"].rolling(window=short_window).mean()
