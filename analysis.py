@@ -78,7 +78,7 @@ def generate_setup_summary(spot_price, max_pain, pcr, oi_walls, price_df):
             lines.append("Price is trading within the Bollinger Bands — no extreme currently.")
 
     return lines
-    def backtest_bollinger_touches(price_df, lookahead=6):
+def backtest_bollinger_touches(price_df, lookahead=6):
     df = price_df.dropna().reset_index(drop=True)
     results = {"upper_touch": [], "lower_touch": []}
 
