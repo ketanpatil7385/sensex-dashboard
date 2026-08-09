@@ -1,7 +1,8 @@
 import streamlit as st
 from data_fetch import get_option_chain, get_price_data, get_sensex_spot
-from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_touches
+from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_multi_lookahead
 import plotly.graph_objects as go
+import pandas as pd
 
 st.set_page_config(page_title="Sensex Expiry Dashboard", layout="wide")
 st.title("📊 Sensex Expiry Day Dashboard")
@@ -27,11 +28,13 @@ try:
     col2.metric("Max Pain", f"{max_pain:,.0f}")
     col3.metric("PCR", round(pcr, 2))
     col4.metric("Top OI Wall", f"{oi_walls[0]:,.0f}")
+
     st.subheader("Setup Summary")
     summary_lines = generate_setup_summary(spot_price, max_pain, pcr, oi_walls, price_df)
     for line in summary_lines:
         st.write(f"• {line}")
     st.caption("This is a descriptive summary of the data above — not a trade recommendation.")
+
     st.subheader("Price Action with Bollinger Bands")
     fig = go.Figure()
     fig.add_trace(go.Candlestick(
@@ -53,22 +56,24 @@ try:
         (chain_df["strike"] < spot_price + 1000)
     ]
     st.dataframe(atm_range, use_container_width=True)
-    st.subheader("Backtest: Bollinger Band Touches")
-    bt_results = backtest_bollinger_touches(price_df)
 
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.write("**Upper Band Touches**")
-        st.write(f"Occurrences: {bt_results['upper_touch']['count']}")
-        st.write(f"Avg move after 30 min: {bt_results['upper_touch']['avg_pct_change']:.2f}%")
-        st.write(f"% of time price went up: {bt_results['upper_touch']['pct_positive']:.0f}%")
-    with col_b:
-        st.write("**Lower Band Touches**")
-        st.write(f"Occurrences: {bt_results['lower_touch']['count']}")
-        st.write(f"Avg move after 30 min: {bt_results['lower_touch']['avg_pct_change']:.2f}%")
-        st.write(f"% of time price went up: {bt_results['lower_touch']['pct_positive']:.0f}%")
-
+    st.subheader("Backtest: Bollinger Band Touches (Multiple Windows)")
+    multi_bt = backtest_bollinger_multi_lookahead(price_df)
+    rows = []
+    for window, res in multi_bt.items():
+        rows.append({
+            "Window": window,
+            "Upper Touch Count": res["upper_touch"]["count"],
+            "Upper Avg %": round(res["upper_touch"]["avg_pct_change"], 3),
+            "Upper % Up": round(res["upper_touch"]["pct_positive"], 0),
+            "Lower Touch Count": res["lower_touch"]["count"],
+            "Lower Avg %": round(res["lower_touch"]["avg_pct_change"], 3),
+            "Lower % Up": round(res["lower_touch"]["pct_positive"], 0),
+        })
+    bt_df = pd.DataFrame(rows)
+    st.dataframe(bt_df, use_container_width=True)
     st.caption("Historical pattern only — past behavior doesn't guarantee future results.")
+
     st.caption("⚠️ Data and analysis only — not investment advice. Consult a SEBI-registered advisor before trading.")
 
 except Exception as e:
