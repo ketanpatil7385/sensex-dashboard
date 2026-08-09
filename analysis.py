@@ -161,3 +161,91 @@ def get_volatility_context(price_df):
         "avg_range": avg_range,
         "band_width": band_width,
     }
+
+
+def historical_next_day_distribution(price_df, short_window=9, long_window=21):
+    df = price_df.dropna().copy()
+    df["date_only"] = pd.to_datetime(df["date"]).dt.date
+    df["sma_short"] = df["close"].rolling(window=short_window).mean()
+    df["sma_long"] = df["close"].rolling(window=long_window).mean()
+    df = df.dropna()
+
+    daily_close = df.groupby("date_only").agg(
+        close=("close", "last"),
+        sma_short=("sma_short", "last"),
+        sma_long=("sma_short", "last"),
+    ).reset_index()
+
+    daily_close["trend_bucket"] = daily_close.apply(
+        lambda r: "Above both averages" if r["close"] > r["sma_short"] and r["close"] > r["sma_long"]
+        else ("Below both averages" if r["close"] < r["sma_short"] and r["close"] < r["sma_long"]
+        else "Mixed"), axis=1
+    )
+
+    daily_close["next_day_close"] = daily_close["close"].shift(-1)
+    daily_close["next_day_pct_change"] = (
+        (daily_close["next_day_close"] - daily_close["close"]) / daily_close["close"] * 100
+    )
+    daily_close = daily_close.dropna(subset=["next_day_pct_change"])
+
+    summary = {}
+    for bucket in daily_close["trend_bucket"].unique():
+        subset = daily_close[daily_close["trend_bucket"] == bucket]
+        changes = subset["next_day_pct_change"]
+        summary[bucket] = {
+            "days_observed": len(changes),
+            "avg_next_day_pct": changes.mean(),
+            "pct_days_up": (changes > 0).mean() * 100,
+            "min_pct": changes.min(),
+            "max_pct": changes.max(),
+        }
+    return summary
+
+
+def calculate_rsi(price_df, period=14):
+    df = price_df.copy()
+    delta = df["close"].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    df["rsi"] = 100 - (100 / (1 + rs))
+    return df
+
+
+def calculate_macd(price_df, fast=12, slow=26, signal=9):
+    df = price_df.copy()
+    df["ema_fast"] = df["close"].ewm(span=fast, adjust=False).mean()
+    df["ema_slow"] = df["close"].ewm(span=slow, adjust=False).mean()
+    df["macd"] = df["ema_fast"] - df["ema_slow"]
+    df["macd_signal"] = df["macd"].ewm(span=signal, adjust=False).mean()
+    df["macd_hist"] = df["macd"] - df["macd_signal"]
+    return df
+
+
+def get_momentum_reading(price_df):
+    df = calculate_rsi(price_df)
+    df = calculate_macd(df)
+    df = df.dropna()
+    if len(df) == 0:
+        return {"rsi": None, "rsi_read": "N/A", "macd_read": "N/A"}
+
+    last = df.iloc[-1]
+    rsi = last["rsi"]
+    if rsi > 70:
+        rsi_read = "Overbought"
+    elif rsi < 30:
+        rsi_read = "Oversold"
+    else:
+        rsi_read = "Neutral"
+
+    macd_read = "Bullish crossover" if last["macd"] > last["macd_signal"] else "Bearish crossover"
+
+    return {
+        "rsi": round(rsi, 1),
+        "rsi_read": rsi_read,
+        "macd": round(last["macd"], 2),
+        "macd_signal": round(last["macd_signal"], 2),
+        "macd_read": macd_read,
+    }
