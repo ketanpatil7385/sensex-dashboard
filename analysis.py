@@ -100,3 +100,24 @@ def backtest_bollinger_multi_lookahead(price_df, lookaheads=[3, 6, 12, 24]):
         minutes = lookahead * 5
         all_results[f"{minutes} min"] = summary
     return all_results
+
+
+def backtest_baseline_drift(price_df, lookaheads=[3, 6, 12, 24]):
+    df = price_df.dropna().reset_index(drop=True)
+    baseline = {}
+    for lookahead in lookaheads:
+        changes = []
+        for i in range(len(df) - lookahead):
+            row = df.iloc[i]
+            future_price = df.iloc[i + lookahead]["close"]
+            pct_change = (future_price - row["close"]) / row["close"] * 100
+            changes.append(pct_change)
+        minutes = lookahead * 5
+        if changes:
+            baseline[f"{minutes} min"] = {
+                "avg_pct_change": sum(changes) / len(changes),
+                "pct_positive": sum(1 for c in changes if c > 0) / len(changes) * 100,
+            }
+        else:
+            baseline[f"{minutes} min"] = {"avg_pct_change": 0, "pct_positive": 0}
+    return baseline
