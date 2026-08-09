@@ -1,6 +1,6 @@
 import streamlit as st
 from data_fetch import get_option_chain, get_price_data, get_sensex_spot
-from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_multi_lookahead, backtest_baseline_drift
+from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_multi_lookahead, backtest_baseline_drift, classify_trend
 import plotly.graph_objects as go
 import pandas as pd
 
@@ -85,6 +85,14 @@ try:
     baseline_df = pd.DataFrame(baseline_rows)
     st.dataframe(baseline_df, use_container_width=True)
     st.caption("Compare this to the touch-specific table above — if the numbers are similar, the band-touch pattern is likely just general market drift, not a distinct signal.")
+
+    st.subheader("Intraday Trend (as of now)")
+    trend_info = classify_trend(price_df)
+    st.metric("Current Classification", trend_info["trend"])
+    st.write(f"Bullish signals: {trend_info.get('bullish_signals', 'N/A')}")
+    st.write(f"Price vs short-term average: {trend_info.get('price_vs_short_sma', 'N/A')}")
+    st.write(f"Price vs long-term average: {trend_info.get('price_vs_long_sma', 'N/A')}")
+    st.caption("This describes the current price structure — it is not a prediction of future direction.")
 
     st.caption("⚠️ Data and analysis only — not investment advice. Consult a SEBI-registered advisor before trading.")
 
