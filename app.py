@@ -1,6 +1,6 @@
 import streamlit as st
 from data_fetch import get_option_chain, get_price_data, get_sensex_spot
-from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary
+from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_touches
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Sensex Expiry Dashboard", layout="wide")
@@ -53,7 +53,22 @@ try:
         (chain_df["strike"] < spot_price + 1000)
     ]
     st.dataframe(atm_range, use_container_width=True)
+    st.subheader("Backtest: Bollinger Band Touches")
+    bt_results = backtest_bollinger_touches(price_df)
 
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.write("**Upper Band Touches**")
+        st.write(f"Occurrences: {bt_results['upper_touch']['count']}")
+        st.write(f"Avg move after 30 min: {bt_results['upper_touch']['avg_pct_change']:.2f}%")
+        st.write(f"% of time price went up: {bt_results['upper_touch']['pct_positive']:.0f}%")
+    with col_b:
+        st.write("**Lower Band Touches**")
+        st.write(f"Occurrences: {bt_results['lower_touch']['count']}")
+        st.write(f"Avg move after 30 min: {bt_results['lower_touch']['avg_pct_change']:.2f}%")
+        st.write(f"% of time price went up: {bt_results['lower_touch']['pct_positive']:.0f}%")
+
+    st.caption("Historical pattern only — past behavior doesn't guarantee future results.")
     st.caption("⚠️ Data and analysis only — not investment advice. Consult a SEBI-registered advisor before trading.")
 
 except Exception as e:
