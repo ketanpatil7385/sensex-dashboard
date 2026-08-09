@@ -1,7 +1,6 @@
 import streamlit as st
 from data_fetch import get_option_chain, get_price_data, get_sensex_spot
-from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, backtest_bollinger_multi_lookahead, backtest_baseline_drift, classify_trend
-import plotly.graph_objects as go
+from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, classify_trend, get_volatility_context
 import pandas as pd
 
 st.set_page_config(page_title="Sensex Expiry Dashboard", layout="wide")
@@ -35,56 +34,12 @@ try:
         st.write(f"• {line}")
     st.caption("This is a descriptive summary of the data above — not a trade recommendation.")
 
-    st.subheader("Price Action with Bollinger Bands")
-    fig = go.Figure()
-    fig.add_trace(go.Candlestick(
-        x=price_df["date"], open=price_df["open"], high=price_df["high"],
-        low=price_df["low"], close=price_df["close"], name="Sensex"
-    ))
-    fig.add_trace(go.Scatter(x=price_df["date"], y=price_df["upper_band"],
-                              line=dict(color="rgba(250,0,0,0.4)"), name="Upper Band"))
-    fig.add_trace(go.Scatter(x=price_df["date"], y=price_df["lower_band"],
-                              line=dict(color="rgba(0,0,250,0.4)"), name="Lower Band",
-                              fill="tonexty", fillcolor="rgba(200,200,200,0.1)"))
-    fig.add_trace(go.Scatter(x=price_df["date"], y=price_df["sma"],
-                              line=dict(color="orange", width=1), name="SMA 20"))
-    st.plotly_chart(fig, use_container_width=True)
-
     st.subheader("Option Chain (near ATM)")
     atm_range = chain_df[
         (chain_df["strike"] > spot_price - 1000) &
         (chain_df["strike"] < spot_price + 1000)
     ]
     st.dataframe(atm_range, use_container_width=True)
-
-    st.subheader("Backtest: Bollinger Band Touches (Multiple Windows)")
-    multi_bt = backtest_bollinger_multi_lookahead(price_df)
-    rows = []
-    for window, res in multi_bt.items():
-        rows.append({
-            "Window": window,
-            "Upper Touch Count": res["upper_touch"]["count"],
-            "Upper Avg %": round(res["upper_touch"]["avg_pct_change"], 3),
-            "Upper % Up": round(res["upper_touch"]["pct_positive"], 0),
-            "Lower Touch Count": res["lower_touch"]["count"],
-            "Lower Avg %": round(res["lower_touch"]["avg_pct_change"], 3),
-            "Lower % Up": round(res["lower_touch"]["pct_positive"], 0),
-        })
-    bt_df = pd.DataFrame(rows)
-    st.dataframe(bt_df, use_container_width=True)
-
-    st.subheader("Baseline: Average Drift (All Periods, No Condition)")
-    baseline = backtest_baseline_drift(price_df)
-    baseline_rows = []
-    for window, res in baseline.items():
-        baseline_rows.append({
-            "Window": window,
-            "Baseline Avg %": round(res["avg_pct_change"], 3),
-            "Baseline % Up": round(res["pct_positive"], 0),
-        })
-    baseline_df = pd.DataFrame(baseline_rows)
-    st.dataframe(baseline_df, use_container_width=True)
-    st.caption("Compare this to the touch-specific table above — if the numbers are similar, the band-touch pattern is likely just general market drift, not a distinct signal.")
 
     st.subheader("Intraday Trend (as of now)")
     trend_info = classify_trend(price_df)
@@ -93,6 +48,18 @@ try:
     st.write(f"Price vs short-term average: {trend_info.get('price_vs_short_sma', 'N/A')}")
     st.write(f"Price vs long-term average: {trend_info.get('price_vs_long_sma', 'N/A')}")
     st.caption("This describes the current price structure — it is not a prediction of future direction.")
+
+    st.subheader("Volatility Context")
+    vol = get_volatility_context(price_df)
+    vcol1, vcol2, vcol3 = st.columns(3)
+    vcol1.metric("ATR (14-period)", f"{vol['atr']:,.1f}" if vol['atr'] else "N/A")
+    vcol2.metric("Today's Range So Far", f"{vol['today_range']:,.1f}" if vol['today_range'] else "N/A")
+    vcol3.metric("Avg Daily Range (recent)", f"{vol['avg_range']:,.1f}" if vol['avg_range'] else "N/A")
+    if vol['today_range'] and vol['avg_range']:
+        pct_of_avg = (vol['today_range'] / vol['avg_range']) * 100
+        st.write(f"Today's range is **{pct_of_avg:.0f}%** of the recent average daily range.")
+    st.write(f"Current Bollinger Band width: {vol['band_width']:,.1f}" if vol['band_width'] else "Band width: N/A")
+    st.caption("These are historical/current measures of how much the index has typically moved — not a forecast of today's remaining movement.")
 
     st.caption("⚠️ Data and analysis only — not investment advice. Consult a SEBI-registered advisor before trading.")
 
