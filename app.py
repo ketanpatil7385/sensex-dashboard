@@ -1,7 +1,8 @@
 import streamlit as st
 from data_fetch import get_option_chain, get_price_data, get_sensex_spot
-from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, classify_trend, get_volatility_context
+from analysis import calculate_pcr, calculate_max_pain, get_oi_walls, calculate_bollinger_bands, generate_setup_summary, classify_trend, get_volatility_context, historical_next_day_distribution, get_momentum_reading
 import pandas as pd
+import datetime
 
 st.set_page_config(page_title="Sensex Expiry Dashboard", layout="wide")
 st.title("📊 Sensex Expiry Day Dashboard")
@@ -49,6 +50,28 @@ try:
     st.write(f"Price vs long-term average: {trend_info.get('price_vs_long_sma', 'N/A')}")
     st.caption("This describes the current price structure — it is not a prediction of future direction.")
 
+    st.subheader("Momentum Indicators")
+    momentum = get_momentum_reading(price_df)
+    mcol1, mcol2 = st.columns(2)
+    mcol1.metric("RSI (14)", momentum.get("rsi", "N/A"), momentum.get("rsi_read", ""))
+    mcol2.metric("MACD Signal", momentum.get("macd_read", "N/A"))
+    st.caption("RSI and MACD describe current momentum — not a prediction of future direction.")
+
+    st.subheader("Trend History (This Session)")
+    if "trend_log" not in st.session_state:
+        st.session_state.trend_log = []
+    current_time = datetime.datetime.now().strftime("%H:%M")
+    if not st.session_state.trend_log or st.session_state.trend_log[-1]["time"] != current_time:
+        st.session_state.trend_log.append({
+            "time": current_time,
+            "spot": round(spot_price, 0),
+            "trend": trend_info["trend"],
+            "rsi": momentum.get("rsi", "N/A"),
+        })
+    trend_log_df = pd.DataFrame(st.session_state.trend_log)
+    st.dataframe(trend_log_df, use_container_width=True)
+    st.caption("Builds up as you keep this tab open through the day. Resets if the tab is closed or the app restarts.")
+
     st.subheader("Volatility Context")
     vol = get_volatility_context(price_df)
     vcol1, vcol2, vcol3 = st.columns(3)
@@ -60,6 +83,22 @@ try:
         st.write(f"Today's range is **{pct_of_avg:.0f}%** of the recent average daily range.")
     st.write(f"Current Bollinger Band width: {vol['band_width']:,.1f}" if vol['band_width'] else "Band width: N/A")
     st.caption("These are historical/current measures of how much the index has typically moved — not a forecast of today's remaining movement.")
+
+    st.subheader("Historical Next-Day Move Distribution")
+    hist_dist = historical_next_day_distribution(price_df)
+    hist_rows = []
+    for bucket, stats in hist_dist.items():
+        hist_rows.append({
+            "Yesterday's Setup": bucket,
+            "Days Observed": stats["days_observed"],
+            "Avg Next-Day %": round(stats["avg_next_day_pct"], 2),
+            "% Days Up": round(stats["pct_days_up"], 0),
+            "Min %": round(stats["min_pct"], 2),
+            "Max %": round(stats["max_pct"], 2),
+        })
+    hist_df = pd.DataFrame(hist_rows)
+    st.dataframe(hist_df, use_container_width=True)
+    st.caption("This shows how price has historically moved the day after similar setups — it is a distribution of past outcomes, not a prediction for tomorrow. Small sample sizes can be misleading.")
 
     st.caption("⚠️ Data and analysis only — not investment advice. Consult a SEBI-registered advisor before trading.")
 
